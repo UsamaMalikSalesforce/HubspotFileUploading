@@ -15,9 +15,13 @@ namespace HubspotFileUploading
         string fileDataOptions = "";
         public HubspotService()
         {
+            //Create static json options.
             var dataOptions = new HubData() { access = "PUBLIC_INDEXABLE", duplicateValidationScope = "EXACT_FOLDER", duplicateValidationStrategy = "NONE", overwrite = false };
+            
+            //Converting object to create JSON String Format.
             fileDataOptions = dataOptions.ObjectToString();
         }
+        //Endpoint to upload API Hubspot
         static string endPoint = "https://api.hubapi.com/filemanager/api/v3/files/upload";
         public async Task<HelperClass.Result> UploadFileMulti()
         {
@@ -26,34 +30,54 @@ namespace HubspotFileUploading
             {
 
                 var associationList = new List<Association>();
-                
+                //Read CustomConfig Json file and Mapped into object.
                 var configData = ((string)HelperClass.GetCustomConfig().Data).StringToSingleCls<HubspotModel>();
+                
+                //Reading all files from given directory in customConfig.json file.
                 string[] fileArray = Directory.GetFiles(configData.uploadingFolder);
+                
+                //storing Files of directories, path of file, name and extensions too.
                 var allFiles = new List<Files>();
                 foreach (var item in fileArray)
                 {
                     allFiles.Add( new Files() { data = File.ReadAllBytes(item), filePath = item});
                 }
+
                 int counter = 0;
+                //Loop through all files
                 foreach (var item in allFiles)
                 {
                     var association = new Association();
                     HttpClient httpClient = new HttpClient();
                     httpClient.DefaultRequestHeaders.Add("Authorization", configData.accessToken);
                     MultipartFormDataContent form = new MultipartFormDataContent();
-
+                    
+                    //folderPath parameter.
                     form.Add(new StringContent(configData.folderPath), "folderPath");
+                    
+                    //options json string parameter
                     form.Add(new StringContent(fileDataOptions), "options");
                     var file = File.ReadAllBytes(item.filePath);
+                    
+                    //Attaching file to send in form-body
                     form.Add(new ByteArrayContent(file, 0, file.Length), "file", item.fileName);
+                    
                     HttpResponseMessage response = await httpClient.PostAsync(endPoint, form);
                     response.EnsureSuccessStatusCode();
                     httpClient.Dispose();
+
+                    //response of API
                     string sd = response.Content.ReadAsStringAsync().Result;
+
+                    //Associate linking
                     if(response.IsSuccessStatusCode)
                     {
+                        //Maping response into object
                         var responseModel = sd.StringToSingleCls<ApiResponseModel.UploadFile>();
+
                         association.fileId = responseModel.objects.FirstOrDefault().id;
+
+                        //Deal Id is static for now : 13146268956
                         association.associationDetails.Add(new AssociationDetail() { dealIds = new List<long> { 13146268956 } });
                         associationList.Add(association);
                         Console.WriteLine(responseModel.objects[0].id);
@@ -63,6 +87,7 @@ namespace HubspotFileUploading
                     message += result.Status ? "Successful" : "Failed";
                     Console.WriteLine(message);
                 }
+                //Association Process
                 AssociationAPI(associationList,configData);
                 result.Data = associationList;
                 result.Status = true;
@@ -80,6 +105,7 @@ namespace HubspotFileUploading
         {
             try
             {
+                //Simple JSON String passed with Auth Bearer.
                 foreach (var item in associations)
                 {
                     string json = "{ \"engagement\": {" +
