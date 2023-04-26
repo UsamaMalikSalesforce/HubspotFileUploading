@@ -14,10 +14,6 @@ namespace HubspotFileUploading
         {
             IHubsotService obj = new HubspotService();
             var result = obj.UploadFileMulti().Result;
-           // obj.AssociationAPI(new List<HubspotService.Association>());
-            //             obj.UploadFileMulti("https://webhook.site/cdd011f4-55ab-42fe-aae2-289588811034");
-            //  obj.UploadFileMulti("https://hubspot.requestcatcher.com/");
-
             Console.WriteLine(result.Message);
             Console.ReadLine();
         }
