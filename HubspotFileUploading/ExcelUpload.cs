@@ -26,8 +26,8 @@ namespace HubspotFileUploading
             [Name("File Name")]
             public string FileName { get; set; }
          
-            //[Name("Parent ID")]
-           // public string ParentID { get; set; }
+            [Name("Parent ID")]
+            public string ParentID { get; set; }
             
             [Name("Record ID")]
             public string RecordID { get; set; }
@@ -63,7 +63,8 @@ namespace HubspotFileUploading
             }
             catch (Exception e)
             {
-                throw e;
+                Console.WriteLine(e.Message);
+               // throw e;
             }
             return documents;
         }

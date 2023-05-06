@@ -15,7 +15,6 @@ namespace HubspotFileUploading
             IHubsotService obj = new HubspotService();
             var result = obj.UploadFileMulti().Result;
             Console.WriteLine(result.Message);
-
             Console.ReadLine();
         }
     }
