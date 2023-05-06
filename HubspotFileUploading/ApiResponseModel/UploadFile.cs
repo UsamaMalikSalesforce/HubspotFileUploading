@@ -22,9 +22,9 @@ namespace HubspotFileUploading.ApiResponseModel
             public int portal_id { get; set; }
             public string name { get; set; }
             public int size { get; set; }
-            public int height { get; set; }
-            public int width { get; set; }
-            public string encoding { get; set; }
+            public object height { get; set; }
+            public object width { get; set; }
+            public object encoding { get; set; }
             public string type { get; set; }
             public string extension { get; set; }
             public string cloud_key { get; set; }

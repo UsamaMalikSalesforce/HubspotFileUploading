@@ -7,6 +7,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
+using static HubspotFileUploading.HubspotService;
 
 namespace HubspotFileUploading
 {
@@ -32,22 +33,27 @@ namespace HubspotFileUploading
                 var associationList = new List<Association>();
                 //Read CustomConfig Json file and Mapped into object.
                 var configData = ((string)HelperClass.GetCustomConfig().Data).StringToSingleCls<HubspotModel>();
-                
+
+                // Getting data from the CSV
+                IExcelUpload excelUpload = new ExcelUpload();
+                var Filedata = excelUpload.ProcessExcel(configData.csvfile);
+
                 //Reading all files from given directory in customConfig.json file.
-                string[] fileArray = Directory.GetFiles(configData.uploadingFolder);
+                //string[] fileArray = Directory.GetFiles(configData.uploadingFolder);
                 
                 //storing Files of directories, path of file, name and extensions too.
-                var allFiles = new List<Files>();
-                foreach (var item in fileArray)
-                {
-                    allFiles.Add( new Files() { data = File.ReadAllBytes(item), filePath = item});
-                }
+                //var allFiles = new List<Files>();
+                //foreach (var item in Filedata)
+                //{
+                //    allFiles.Add( new Files() { data = File.ReadAllBytes(item.Location), filePath = item});
+                //}
 
                 int counter = 0;
+                List<string> errors = new List<string>();
                 //Loop through all files
-                foreach (var item in allFiles)
+                foreach (var item in Filedata)
                 {
-                    var association = new Association();
+                    var association = new Association(item.FileName);
                     HttpClient httpClient = new HttpClient();
                     httpClient.DefaultRequestHeaders.Add("Authorization", configData.accessToken);
                     MultipartFormDataContent form = new MultipartFormDataContent();
@@ -57,10 +63,10 @@ namespace HubspotFileUploading
                     
                     //options json string parameter
                     form.Add(new StringContent(fileDataOptions), "options");
-                    var file = File.ReadAllBytes(item.filePath);
+                    var file = item.data; //File.ReadAllBytes(item.filePath);
                     
                     //Attaching file to send in form-body
-                    form.Add(new ByteArrayContent(file, 0, file.Length), "file", item.fileName);
+                    form.Add(new ByteArrayContent(file, 0, file.Length), "file", item.FileName);
                     
                     HttpResponseMessage response = await httpClient.PostAsync(endPoint, form);
                     response.EnsureSuccessStatusCode();
@@ -68,27 +74,60 @@ namespace HubspotFileUploading
 
                     //response of API
                     string sd = response.Content.ReadAsStringAsync().Result;
-
+                    
                     //Associate linking
                     if(response.IsSuccessStatusCode)
                     {
                         //Maping response into object
                         var responseModel = sd.StringToSingleCls<ApiResponseModel.UploadFile>();
 
-                        association.fileId = responseModel.objects.FirstOrDefault().id;
+                        association.fileId = responseModel.HaveData() && responseModel.objects.ListHaveData() ?  responseModel.objects.FirstOrDefault().id : 0;
 
                         //Deal Id is static for now : 13146268956
-                        association.associationDetails.Add(new AssociationDetail() { dealIds = new List<long> { 13146268956 } });
+                        long idResult;
+                        long.TryParse(item.RecordID,out idResult);
+                        if(item.ObjectId == "Deal")
+                        {
+                            association.associationDetails.Add(new AssociationDetail() { dealIds = new List<long> { idResult } });
+                        }
+                        else if(item.ObjectId == "Contact")
+                        {
+                            association.associationDetails.Add(new AssociationDetail() { contactIds = new List<long> { idResult } });
+                        }
+                        else if(item.ObjectId == "Company")
+                        {
+                            association.associationDetails.Add(new AssociationDetail() { companyIds = new List<long> { idResult } });
+                        }
+
                         associationList.Add(association);
-                        Console.WriteLine(responseModel.objects[0].id);
+//                        Console.WriteLine(responseModel.objects[0].id);
+                    }
+                    else
+                    {
+                        errors.Add($"File Name: {item.FileName}, Record Id: {item.RecordID}, Object Id: {item.ObjectId}, Salesforce Attachment Id: {item.AttachmentID}");
                     }
                     result.Status = response.IsSuccessStatusCode;
-                    var message = $"{++counter} {item.fileName} uploading ";
+                    var message = $"{++counter}) File Name: {item.FileName}, Hubspot FileId: {association.fileId} uploading ";
                     message += result.Status ? "Successful" : "Failed";
                     Console.WriteLine(message);
                 }
+                Console.WriteLine("-------------------------------------------------------------------");
+                Console.WriteLine($"Uploading Process Completed. Uploaded Files {Filedata.Count() - errors.Count()}/{Filedata.Count()} ");
+                if(errors.Count > 0)
+                {
+                    Console.WriteLine("");
+                    Console.WriteLine("Uploading Errors");
+                    foreach(var error in errors)
+                    {
+                        Console.WriteLine(error);
+                    }
+                    Console.WriteLine("");
+                }
+                Console.WriteLine("-------------------------------------------------------------------");
+
+                Console.WriteLine("Association Process is in Progress");
                 //Association Process
-                AssociationAPI(associationList,configData);
+                await AssociationAPI(associationList,configData);
                 result.Data = associationList;
                 result.Status = true;
                 result.Message = "Uploading Compelete";
@@ -101,23 +140,25 @@ namespace HubspotFileUploading
             return result;
 
         }
-        public async void AssociationAPI(List<Association> associations,HubspotModel configData)
+        public async Task<HelperClass.Result> AssociationAPI(List<Association> associations,HubspotModel configData)
         {
+            var result = new HelperClass.Result();
             try
             {
+                List<string> errors = new List<string>();
                 //Simple JSON String passed with Auth Bearer.
                 foreach (var item in associations)
                 {
                     string json = "{ \"engagement\": {" +
                     "\"active\": true," +
-                    "\"ownerId\": 378520899," +
+                    "\"ownerId\": "+ configData.ownerId + "," +
                     "\"type\": \"NOTE\"," +
                     "\"timestamp\":" + DateTimeOffset.Now.ToUnixTimeMilliseconds() +
                     "}," +
                 "\"associations\": {" +
-                    "\"contactIds\":" + "[]," +
-                    "\"companyIds\":" + "[]," +
-                    "\"dealIds\":" +  Newtonsoft.Json.JsonConvert.SerializeObject(item.associationDetails.FirstOrDefault().dealIds) + "," +
+                    "\"contactIds\":" + (item.isContact ? item.associationDetails.FirstOrDefault().contactIds.ObjectToString() : "[]" ) + "," +
+                    "\"companyIds\":" + (item.isCompany ? item.associationDetails.FirstOrDefault().companyIds.ObjectToString() : "[]") + "," +
+                    "\"dealIds\":" + (item.isDeal ? item.associationDetails.FirstOrDefault().dealIds.ObjectToString() : "[]") +  "," +
                     "\"ownerIds\":[]," +
                     "\"ticketIds\":[]" + //<-- ID OF THE OBJECT IN HUBSPOT
                 "}," +
@@ -133,12 +174,32 @@ namespace HubspotFileUploading
                     HttpClient httpClient = new HttpClient();
                     httpClient.DefaultRequestHeaders.Add("Authorization", configData.accessToken);
                     var res =   await httpClient.PostAsync("https://api.hubapi.com/engagements/v1/engagements", new StringContent(json, Encoding.UTF8, "application/json"));
+                    
+                    Console.WriteLine($"{item.fileName} Association " + (res.IsSuccessStatusCode ? " Success" : "Failed" ));
+                    if (!res.IsSuccessStatusCode)
+                    {
+                        errors.Add($"{item.fileName} Association Failed");
+                    }
                 }
+                Console.WriteLine("------------------------------------------");
+                Console.WriteLine($"Association Completed. Result {associations.Count()-errors.Count()}/{associations.Count}");
+                Console.WriteLine("------------------------------------------");
+                if(errors.Count() > 0)
+                {
+                    Console.WriteLine("Association Errors");
+                    foreach(var error in errors)
+                    {
+                        Console.WriteLine(error);
+                    }
+                }
+                result.Status = true;
+                result.Message = "Passed";
             }
             catch (Exception e)
             {
-
+                result = e.ExceptionResult();
             }
+            return result;
 
         }
 
@@ -156,10 +217,12 @@ namespace HubspotFileUploading
             public byte[] data { get; set; }
             public string filePath{ get; set; }
             public string fileName 
-            { get 
-                {
-                    return Path.GetFileName(this.filePath);
-                }
+            {
+                //get 
+                //{
+                //    return Path.GetFileName(this.filePath);
+                //}
+                get;set;
             }
             public string fileExtension
             {
@@ -168,15 +231,21 @@ namespace HubspotFileUploading
                     return Path.GetExtension(this.filePath);
                 }
             }
+
         }
         public class Association
         {
-            public Association()
+            public Association(string FileName)
             {
                 this.associationDetails = new List<AssociationDetail>();
+                this.fileName = FileName;
             }
             public long fileId { get; set; }
+            public string fileName { get; set; }
             public List<AssociationDetail> associationDetails { get; set; }
+            public bool isCompany { get { return this.associationDetails.ListHaveData() && this.associationDetails.FirstOrDefault().companyIds.ListHaveData(); } }
+            public bool isContact { get { return this.associationDetails.ListHaveData() && this.associationDetails.FirstOrDefault().contactIds.ListHaveData(); } }
+            public bool isDeal { get { return this.associationDetails.ListHaveData() && this.associationDetails.FirstOrDefault().dealIds.ListHaveData(); } }
         }
         public class AssociationDetail
         {
@@ -184,9 +253,13 @@ namespace HubspotFileUploading
             {
                 this.dealIds = new List<long>();
                 this.contactIds = new List<long>();
+                this.companyIds = new List<long>();
             }
             public List<long> contactIds { get; set; }
             public List<long> dealIds { get; set; }
+            public List<long> companyIds { get; set; }
+
+
         }
     }
 }

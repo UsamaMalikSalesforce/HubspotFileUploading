@@ -11,6 +11,8 @@ namespace HubspotFileUploading
         public string accessToken { get; set; }
         public string folderPath { get; set; }
         public string uploadingFolder { get; set; }
+        public string csvfile { get; set; }
+        public string ownerId { get; set; }
 
        
     }
