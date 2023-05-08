@@ -128,7 +128,7 @@ namespace HubspotFileUploading
                 {
                     Console.WriteLine("");
                     Console.WriteLine("Uploading Errors");
-                    using (StreamWriter writer = new StreamWriter("Error Uploading Files -" + DateTime.Now.ToString())) 
+                    using (StreamWriter writer = new StreamWriter("D:\\Hubspot Integration\\Error Uploading Files")) 
                     {
                         foreach (string str in errors)
                         {
@@ -151,6 +151,7 @@ namespace HubspotFileUploading
             catch (Exception e)
             {
                 result = e.ExceptionResult();
+                Console.WriteLine("Catch:" + e.Message);
             }
             return result;
 
@@ -351,7 +352,7 @@ namespace HubspotFileUploading
                 {
                     Console.WriteLine("Association Errors");
                     
-                    using (StreamWriter writer = new StreamWriter("Error Assosiation - " + DateTime.Now.ToString()))
+                    using (StreamWriter writer = new StreamWriter("D:\\Hubspot Integration\\Error Assosiation "))
                     {
                         foreach (string str in errors)
                         {
@@ -366,6 +367,7 @@ namespace HubspotFileUploading
             catch (Exception e)
             {
                 result = e.ExceptionResult();
+                Console.WriteLine("Catch:"+ e.Message);
             }
             return result;
 
