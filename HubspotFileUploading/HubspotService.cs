@@ -38,15 +38,7 @@ namespace HubspotFileUploading
                 IExcelUpload excelUpload = new ExcelUpload();
                 var Filedata = excelUpload.ProcessExcel(configData.csvfile);
 
-                //Reading all files from given directory in customConfig.json file.
-                //string[] fileArray = Directory.GetFiles(configData.uploadingFolder);
                 
-                //storing Files of directories, path of file, name and extensions too.
-                //var allFiles = new List<Files>();
-                //foreach (var item in Filedata)
-                //{
-                //    allFiles.Add( new Files() { data = File.ReadAllBytes(item.Location), filePath = item});
-                //}
 
                 int counter = 0;
                 List<string> errors = new List<string>();
@@ -156,145 +148,7 @@ namespace HubspotFileUploading
             return result;
 
         }  
-        public async Task<HelperClass.Result> UploadFileMultiBatchable()
-        {
-            var result = new HelperClass.Result();
-            try
-            {
-
-                var associationList = new List<Association>();
-                //Read CustomConfig Json file and Mapped into object.
-                var configData = ((string)HelperClass.GetCustomConfig().Data).StringToSingleCls<HubspotModel>();
-
-                // Getting data from the CSV
-                IExcelUpload excelUpload = new ExcelUpload();
-                var Filedata = excelUpload.ProcessExcel(configData.csvfile);
-
-                //Reading all files from given directory in customConfig.json file.
-                //string[] fileArray = Directory.GetFiles(configData.uploadingFolder);
-                
-                //storing Files of directories, path of file, name and extensions too.
-                //var allFiles = new List<Files>();
-                //foreach (var item in Filedata)
-                //{
-                //    allFiles.Add( new Files() { data = File.ReadAllBytes(item.Location), filePath = item});
-                //}
-
-                int counter = 0;
-                List<string> errors = new List<string>();
-                //Loop through all files
-
-                int batchCounter = 200;
-                bool batchComplete = false;
-                bool firstTime = true;
-                while (!batchComplete)
-                {
-                    List<ExcelUpload.FileData> Filedata2;
-                    if (firstTime)
-                    {
-                        Filedata2 = Filedata.Take(batchCounter).ToList();
-                        firstTime = false;
-                        //batchCounter = 200;
-                    }
-                    else
-                    {
-                        Filedata2 = Filedata.Skip(batchCounter).Take(200).ToList();
-                        batchCounter += batchCounter;
-                    }
-                    if (Filedata2.Count <= batchCounter)
-                    {
-                        batchComplete = true;
-                    }
-                }
-                foreach (var item in Filedata)
-                {
-                    var association = new Association(item.FileName);
-                    HttpClient httpClient = new HttpClient();
-                    httpClient.DefaultRequestHeaders.Add("Authorization", configData.accessToken);
-                    MultipartFormDataContent form = new MultipartFormDataContent();
-                    
-                    //folderPath parameter.
-                    form.Add(new StringContent(configData.folderPath), "folderPath");
-                    
-                    //options json string parameter
-                    form.Add(new StringContent(fileDataOptions), "options");
-                    var file = item.data; //File.ReadAllBytes(item.filePath);
-                    
-                    //Attaching file to send in form-body
-                    form.Add(new ByteArrayContent(file, 0, file.Length), "file", item.FileName);
-                    
-                    HttpResponseMessage response = await httpClient.PostAsync(endPoint, form);
-                    response.EnsureSuccessStatusCode();
-                    httpClient.Dispose();
-
-                    //response of API
-                    string sd = response.Content.ReadAsStringAsync().Result;
-                    
-                    //Associate linking
-                    if(response.IsSuccessStatusCode)
-                    {
-                        //Maping response into object
-                        var responseModel = sd.StringToSingleCls<ApiResponseModel.UploadFile>();
-
-                        association.fileId = responseModel.HaveData() && responseModel.objects.ListHaveData() ?  responseModel.objects.FirstOrDefault().id : 0;
-
-                        //Deal Id is static for now : 13146268956
-                        long idResult;
-                        long.TryParse(item.RecordID,out idResult);
-                        if(item.ObjectId == "Deal")
-                        {
-                            association.associationDetails.Add(new AssociationDetail() { dealIds = new List<long> { idResult } });
-                        }
-                        else if(item.ObjectId == "Contact")
-                        {
-                            association.associationDetails.Add(new AssociationDetail() { contactIds = new List<long> { idResult } });
-                        }
-                        else if(item.ObjectId == "Company")
-                        {
-                            association.associationDetails.Add(new AssociationDetail() { companyIds = new List<long> { idResult } });
-                        }
-
-                        associationList.Add(association);
-//                        Console.WriteLine(responseModel.objects[0].id);
-                    }
-                    else
-                    {
-                        errors.Add($"File Name: {item.FileName}, Record Id: {item.RecordID}, Object Id: {item.ObjectId}, Salesforce Attachment Id: {item.AttachmentID}");
-                    }
-                    result.Status = response.IsSuccessStatusCode;
-                    var message = $"{++counter}) File Name: {item.FileName}, Hubspot FileId: {association.fileId} uploading ";
-                    message += result.Status ? "Successful" : "Failed";
-                    Console.WriteLine(message);
-                }
-                Console.WriteLine("-------------------------------------------------------------------");
-                Console.WriteLine($"Uploading Process Completed. Uploaded Files {Filedata.Count() - errors.Count()}/{Filedata.Count()} ");
-                if(errors.Count > 0)
-                {
-                    Console.WriteLine("");
-                    Console.WriteLine("Uploading Errors");
-                    foreach(var error in errors)
-                    {
-                        Console.WriteLine(error);
-                    }
-                    Console.WriteLine("");
-                }
-                Console.WriteLine("-------------------------------------------------------------------");
-
-                Console.WriteLine("Association Process is in Progress");
-                //Association Process
-                await AssociationAPI(associationList,configData);
-                result.Data = associationList;
-                result.Status = true;
-                result.Message = "Uploading Compelete";
-
-            }
-            catch (Exception e)
-            {
-                result = e.ExceptionResult();
-            }
-            return result;
-
-        }
+       
         public async Task<HelperClass.Result> AssociationAPI(List<Association> associations,HubspotModel configData)
         {
             var result = new HelperClass.Result();
@@ -337,7 +191,7 @@ namespace HubspotFileUploading
                         {
                             errors.Add($"{item.fileName} Association Failed, {res.Content.ReadAsStringAsync().Result}");
                         }
-
+                        httpClient.Dispose();
                     }
                     catch (Exception ee)
                     {
@@ -373,7 +227,70 @@ namespace HubspotFileUploading
 
         }
 
-       
+        public async Task<HelperClass.Result> GetUploadedFiles(long? fromDateTime)
+        {
+            var result = new HelperClass.Result();
+            try
+            {
+                HttpClient httpClient = new HttpClient();
+                httpClient.DefaultRequestHeaders.Add("Authorization", "Bearer pat-na1-73c7e0ac-d743-4b69-b934-72aff3867977");
+                httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
+                var response = await httpClient.GetAsync($"https://api.hubapi.com/filemanager/api/v2/files?created__gt={fromDateTime}&limit=1000000");
+                string sd = response.Content.ReadAsStringAsync().Result;
+              //  var data = sd.StringToSingleCls<GetFilesJsonModel.Root>();
+                Console.WriteLine("Get Files Status Code: " +  response.StatusCode);
+                if(response.IsSuccessStatusCode)
+                {
+                    result.Status = true;
+                    result.Message = "Get Success";
+                    result.Data = sd.StringToSingleCls<GetFilesJsonModel.Root>();
+                }
+                httpClient.Dispose();
+            }
+            catch (Exception e)
+            {
+                result = e.ExceptionResult();
+            }
+            return result;
+        }
+
+        public async Task<HelperClass.Result> DeleteFiles(List<GetFilesJsonModel.Object> objects)
+        {
+            var result = new HelperClass.Result();
+            List<string> errors = new List<string>();
+            try
+            {
+                if(objects.ListHaveData())
+                {
+                    foreach (var item in objects.Take(5).ToList())
+                    {
+                        HttpClient httpClient = new HttpClient();
+                        httpClient.DefaultRequestHeaders.Add("Authorization", "Bearer pat-na1-73c7e0ac-d743-4b69-b934-72aff3867977");
+                        httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
+                        var response = await httpClient.DeleteAsync("https://api.hubapi.com/filemanager/api/v2/files?created__gt=1683270000&limit=1000000");
+                        string sd = response.Content.ReadAsStringAsync().Result;
+                        if(!response.IsSuccessStatusCode)
+                        {
+                            var er = sd.StringToSingleCls<DeleteFileModel>();
+                            errors.Add($"{item.name} unable to delete. {response.ToString()}");
+                        }
+                        Console.WriteLine($"{item.name} is deleted");
+                        httpClient.Dispose();
+                    }
+                    errors.WriteErrorFile("D:\\Hubspot Integration\\Error Delete Files");
+                }
+                else
+                {
+                    result.Status = false;
+                    result.Message = "Data not found";
+                }
+            }
+            catch (Exception e)
+            {
+                result = e.ExceptionResult();
+            }
+            return result;
+        }
 
         public class HubData
         {

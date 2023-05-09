@@ -10,6 +10,8 @@ namespace HubspotFileUploading.Interfaces
     internal interface IHubsotService
     {
         Task<HelperClass.Result> UploadFileMulti();
+        Task<HelperClass.Result> GetUploadedFiles(long? fromDateTime);
+        Task<HelperClass.Result> DeleteFiles(List<GetFilesJsonModel.Object> objects);
        // void AssociationAPI  (List<Association> associations, HubspotModel configData);
     }
 }

@@ -19,6 +19,17 @@ namespace HubspotFileUploading
         //public static string BatchFileName = "PTIBatchFile.bat";
         // public static string DataLoaderPath = @"C:\\Users\\Usama Malik\\dataloader\\v57.0.0\\bin\";
         // public static string cmdBase = $"process.bat F:\\Projects\\PTI\\{CurrentDateWithDash()} ";
+        public static void WriteErrorFile(this List<string> errors, string fileName)
+        {
+            using (StreamWriter writer = new StreamWriter(fileName))
+            {
+                foreach (string str in errors)
+                {
+                    Console.WriteLine(str);
+                    writer.WriteLine(str);
+                }
+            }
+        }
         public static HelperClass.Result ExceptionResult(this Exception exception)
         {
             return (new Result() { Status = true, Message = exception.Message });

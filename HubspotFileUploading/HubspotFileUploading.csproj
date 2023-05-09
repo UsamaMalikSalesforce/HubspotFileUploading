@@ -85,7 +85,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ApiResponseModel\UploadFile.cs" />
+    <Compile Include="DeleteFileModel.cs" />
     <Compile Include="ExcelUpload.cs" />
+    <Compile Include="GetFilesJsonModel.cs" />
     <Compile Include="HelperClass.cs" />
     <Compile Include="HubspotModel.cs" />
     <Compile Include="HubspotService.cs" />
